@@ -9,9 +9,8 @@
 
 /*
 Reresentation of Shared Memory Matrix:
-int array in heap holding shmids of the 1D arrays, each shmid coressponds to row of matrix
+n*p int shared memory array coresponding to array in row major scheme
 */
-
 #include <stdio.h>
 #include <sys/shm.h> // for shmget()
 #include <sys/ipc.h> // for shmget()
@@ -26,38 +25,16 @@ const int A[2][3] = {{1, 2, 3}, {4, 5, 6}};
 const int B[3][4] = {{1, 2, 3, 4}, {5, 6, 7, 8}, {9, 10, 11, 12}};
 
 /**
- * @brief make 1D array in Shared Memory
+ * @brief generates and returns shmid of shared memory of n*p size
  *
- * @param n size of the 1D arrays
- * @return int the shmid
+ * @param n
+ * @param p
+ * @return int
  */
-int makeShmArray(int p)
+int makeShmMatrix(int n, int p)
 {
-    int shmid = shmget(IPC_PRIVATE, sizeof(int) * p, IPC_CREAT | 0777);
-    printf("Made SHM with id %d\n", shmid);
-    if (shmid == -1)
-    {
-        printf("Error: can't make SHM");
-        exit(0);
-    }
-
+    int shmid = shmget(IPC_PRIVATE, sizeof(int) * n * p, IPC_CREAT | 0777);
     return shmid;
-}
-
-/**
- * @brief make an int array in heap corresponding to a row of matrix, each element contains shmid of 1D array coresspoing a row of matrix
- *
- * @param n number of rows
- * @param p number of columns
- * @return int*  adress of the int array in heap
- */
-int *makeShmMatrix(int n, int p)
-{
-    int *shmidList = (int *)malloc(sizeof(int) * n);
-    for (int i = 0; i < n; i++)
-        shmidList[i] = makeShmArray(p);
-
-    return shmidList;
 }
 
 /**
@@ -80,31 +57,6 @@ void *getShmDataPtr(int shmid)
 }
 
 /**
- * @brief run the child task
- *
- * @param i index for coressponding row of matrix
- * @param shmid the shmid coresspoing to the row of matrix
- */
-void child_task(int i, int shmid)
-{
-    int *row_ptr = (int *)getShmDataPtr(shmid);
-
-    if (row_ptr == (void *)-1)
-    {
-        perror("shmat fail");
-        exit(1);
-    }
-
-    for (int j = 0; j < p; j++)
-    {
-        row_ptr[j] = 0;
-        for (int k = 0; k < m; k++)
-            row_ptr[j] += A[i][k] * B[k][j];
-    }
-    shmdt(row_ptr);
-}
-
-/**
  * @brief wait for the process with given pid and provide diagnostic data
  *
  * @param pid the process id to wait for
@@ -123,18 +75,43 @@ void wait_for_process(int pid)
 }
 
 /**
+ * @brief run the child task
+ *
+ * @param i index for coressponding row of matrix
+ * @param shmid the shmid coresspoing to the row of matrix
+ */
+void child_task(int i, int shmid)
+{
+    int *matrix = (int *)getShmDataPtr(shmid);
+
+    if (matrix == (void *)-1)
+    {
+        perror("shmat fail");
+        exit(1);
+    }
+
+    for (int j = 0; j < p; j++)
+    {
+        matrix[i * n + j] = 0;
+        for (int k = 0; k < m; k++)
+            matrix[i * n + j] += A[i][k] * B[k][j];
+    }
+    shmdt(matrix);
+}
+
+/**
  * @brief multiply two matrices A and B and store the result in shared memory matrix
  *
  * @param shmidList the list of shmid's coressponding to the rows of matrix
  */
-void matrix_multiplication(int *shmidList)
+void matrix_multiplication(int shmid)
 {
     for (int i = 0; i < n; i++)
     {
         __pid_t pid = fork();
         if (pid == 0)
         {
-            child_task(i, shmidList[i]);
+            child_task(i, shmid);
             exit(0);
         }
         else
@@ -143,42 +120,28 @@ void matrix_multiplication(int *shmidList)
 }
 
 /**
- * @brief print the shared memory array
- *
- * @return
- */
-void printShmArray(int shmid)
-{
-    int *row_ptr = (int *)getShmDataPtr(shmid);
-    if (row_ptr == (void *)-1)
-    {
-        perror("shmat fail");
-        exit(1);
-    }
-    for (int i = 0; i < p; i++)
-        printf("%d\t", row_ptr[i]);
-    shmdt(row_ptr);
-}
-
-/**
  * @brief print the matrix
  *
- * @param shmidList the list of shmid's coressponding to the rows of matrix
+ * @param shmid shmid of the matrix stored as 1D array in row major order
  */
-void printMatrix(int *shmidList)
+void printMatrix(int shmid)
 {
+    int *matrix = (int *)getShmDataPtr(shmid);
     for (int i = 0; i < n; i++)
     {
-        printShmArray(shmidList[i]);
+        for (int j = 0; j < p; j++)
+            printf("%d\t", matrix[i * n + j]);
+
         printf("\n");
     }
 }
 
 /**
- * @brief frees the Shared Memory
+ * @brief frees the Shared Memory Matrix
  *
+ * @param shmid
  */
-void freeSHM(int shmid)
+void freeShmMatrix(int shmid)
 {
     int status = shmctl(shmid, IPC_RMID, NULL);
     if (status == 0)
@@ -189,26 +152,14 @@ void freeSHM(int shmid)
         fprintf(stderr, "shmctl() returned wrong value while removing shared memory with id = %d.\n", shmid);
 }
 
-/**
- * @brief frees all the shared memory rows
- *
- * @param shmidList list of shmid's coressponding to the rows of matrix
- */
-void freeShmMatrix(int *shmidList)
-{
-    for (int i = 0; i < n; i++)
-        freeSHM(shmidList[i]);
-}
-
 int main()
 {
-    int *shmidList = makeShmMatrix(n, p);
-    matrix_multiplication(shmidList);
+    int shmid = makeShmMatrix(n, p);
+    matrix_multiplication(shmid);
 
-    printMatrix(shmidList);
+    printMatrix(shmid);
 
-    freeShmMatrix(shmidList);
-    free(shmidList);
+    freeShmMatrix(shmid);
 
     return 0;
 }
