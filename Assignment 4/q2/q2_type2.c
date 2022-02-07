@@ -135,6 +135,7 @@ void matrix_multiplication(int *shmidList)
     int pidIdx = 0;
 
     // Notice: all child processes are simultaneously run, only waiting is done by parent for all childs to complete.
+    // here there is not chance of race condition as all the child will have access to thier own shared memory
     for (int i = 0; i < n; i++)
     {
         __pid_t pid = fork();

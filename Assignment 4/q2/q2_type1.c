@@ -106,6 +106,11 @@ void child_task(int i, int shmid)
  */
 void matrix_multiplication(int shmid)
 {
+    int pidList[n]; // pidList made to keep track of all the pids of child processess
+    int pidIdx = 0;
+
+    // Notice: all child processes are simultaneously run, only waiting is done by parent for all childs to complete.
+    // but here there is no race condition as all the childs writes in different location (if they write in same location, race condition will occur)
     for (int i = 0; i < n; i++)
     {
         __pid_t pid = fork();
@@ -115,8 +120,12 @@ void matrix_multiplication(int shmid)
             exit(0);
         }
         else
-            wait_for_process(pid);
+            pidList[pidIdx++] = pid;
     }
+
+    // wait for all the child processess to complete matrix multiplication
+    for (int i = 0; i < n; i++)
+        wait_for_process(pidList[i]);
 }
 
 /**
