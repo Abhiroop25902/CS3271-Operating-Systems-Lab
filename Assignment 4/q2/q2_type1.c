@@ -10,6 +10,8 @@
 /*
 Reresentation of Shared Memory Matrix:
 n*p int shared memory array coresponding to array in row major scheme
+
+Each childs can run simultaneosly provided each child writes do not collide with other children
 */
 #include <stdio.h>
 #include <sys/shm.h> // for shmget()

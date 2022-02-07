@@ -11,7 +11,7 @@
 Reresentation of Shared Memory Matrix:
 int array in heap holding shmids of the 1D arrays, each shmid coressponds to row of matrix
 
-Why? here for all process has been given thier own row, so no race condition is possible, no need to wait for one process to complete before starting other
+Why? here for all process has been given thier own row, so no race condition is possible (even with errors, if any), no need to wait for one process to complete before starting other
 */
 
 #include <stdio.h>
