@@ -9,6 +9,7 @@
 
 /*
 Practice for q2 -> working with 1D arrays
+
 */
 
 #include <stdio.h>
