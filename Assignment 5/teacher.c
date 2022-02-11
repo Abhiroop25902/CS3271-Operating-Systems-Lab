@@ -76,7 +76,7 @@ void printChronologicalOrder()
 
     for (int i = 0; i < arrSize; i++)
         if (attArrPtr[i].roll != -1)
-            printf("Student %d attended\n", attArrPtr[i].roll);
+            printf("Student %d attended; Time: %s", attArrPtr[i].roll, ctime(&(attArrPtr[i].tm)));
 
     shmdt(attArrPtr);
 }
@@ -105,6 +105,14 @@ void terminateProgram(int signum)
         fprintf(stderr, "Cannot remove shared memory with id = %d.\n", shmid);
     else
         fprintf(stderr, "shmctl() returned wrong value while removing shared memory with id = %d.\n", shmid);
+
+    printf("Attempting to delete temp file \"%s\"\n", COMMON_FILEPATH);
+    int removeStatus = remove(COMMON_FILEPATH);
+
+    if (removeStatus == 0)
+        printf("Syccessfully removed %s\n", COMMON_FILEPATH);
+    else if (removeStatus == -1)
+        perror("failed to delete file");
 
     // now we have freed the SHM, now we kill the program itself
     status = kill(0, SIGKILL);
@@ -139,10 +147,10 @@ void setSharedArray()
 
 /**
  * @brief checks if the given string is all numbers or not
- * 
- * @param c 
- * @return true 
- * @return false 
+ *
+ * @param c
+ * @return true
+ * @return false
  */
 bool isCharNumeric(char *c)
 {
@@ -183,6 +191,16 @@ int main(int argc, char *argv[])
 
     // set program to call terminateProgram when inturrepted(SIGINT)
     sighandler_t shandler = signal(SIGINT, terminateProgram);
+
+    // get common file shmkey to get/make same shared memory
+    printf("Generating a common file \"%s\" for inter process communication\n", COMMON_FILEPATH);
+    FILE *fp = fopen(COMMON_FILEPATH, "w");
+    if (fp == NULL)
+    {
+        perror("File not able to made");
+        exit(0);
+    }
+    fclose(fp);
 
     // get common file shmkey to get/make same shared memory
     int shmkey = ftok(COMMON_FILEPATH, PROJ_ID);
