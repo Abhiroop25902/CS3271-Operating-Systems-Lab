@@ -17,11 +17,13 @@
 #include <ctype.h>   // for isdigit()
 
 // define common filepath and prject id for ftok
-const char *COMMON_FILEPATH = "./common_file";
+const char *ARRAY_FILEPATH = "./common_array";
+const char *ARRAY_SIZE_FILEPATH = "./common_array_size";
 const int PROJ_ID = 1;
 
-int shmid;   // made this global for sighandler
-int arrSize; // made this global for sighandler
+int arrShmid;     // made this global for sighandler
+int arrSizeShmid; // made this global for sighandler
+int arrSize;      // made this global for sighandler (actually printChronologicalOrder() called by the sighandler)
 
 typedef void (*sighandler_t)(int); // define the sighandler
 
@@ -70,7 +72,7 @@ void *getShmDataPtr(int shmid)
  */
 void printChronologicalOrder()
 {
-    att *attArrPtr = (att *)getShmDataPtr(shmid);
+    att *attArrPtr = (att *)getShmDataPtr(arrShmid);
 
     qsort(attArrPtr, arrSize, sizeof(att), attComparator);
 
@@ -79,6 +81,40 @@ void printChronologicalOrder()
             printf("Student %d attended; Time: %s", attArrPtr[i].roll, ctime(&(attArrPtr[i].tm)));
 
     shmdt(attArrPtr);
+}
+
+/**
+ * @brief Create a File object with given filepath
+ *
+ * @param filepath
+ */
+void createFile(const char *filepath)
+{
+    // get common file shmkey to get/make same shared memory
+    printf("Generating a common file \"%s\" for inter process communication\n", filepath);
+    FILE *fp = fopen(filepath, "w");
+    if (fp == NULL)
+    {
+        perror("File not able to made");
+        exit(0);
+    }
+    fclose(fp);
+}
+
+/**
+ * @brief delete file given
+ *
+ * @param filepath path of the file to be deleted
+ */
+void deleteFile(const char *filepath)
+{
+    printf("Attempting to delete temp file \"%s\"\n", filepath);
+    int removeStatus = remove(filepath);
+
+    if (removeStatus == 0)
+        printf("Syccessfully removed %s\n", filepath);
+    else if (removeStatus == -1)
+        perror("failed to delete file");
 }
 
 /**
@@ -92,27 +128,22 @@ void terminateProgram(int signum)
     printf("\n");
     printChronologicalOrder(); // prints the attendace array in chronological order
 
-    int status = shmctl(shmid, IPC_RMID, NULL);
-    // int shmctl(int shmid, int cmd, struct shmid_ds *buf);
-    // control the SHM held by shmid
+    int status = shmctl(arrShmid, IPC_RMID, NULL);
+    // int shmctl(int arrShmid, int cmd, struct shmid_ds *buf);
+    // control the SHM held by arrShmid
     // what to do is defined by the cmd
     // here IPC_RMID is a signal to free the SHM
     // in ICP_RMID mode -> return 0 if success, -1 on error
 
     if (status == 0)
-        fprintf(stderr, "Remove shared memory with id = %d.\n", shmid);
+        fprintf(stderr, "Remove shared memory with id = %d.\n", arrShmid);
     else if (status == -1)
-        fprintf(stderr, "Cannot remove shared memory with id = %d.\n", shmid);
+        fprintf(stderr, "Cannot remove shared memory with id = %d.\n", arrShmid);
     else
-        fprintf(stderr, "shmctl() returned wrong value while removing shared memory with id = %d.\n", shmid);
+        fprintf(stderr, "shmctl() returned wrong value while removing shared memory with id = %d.\n", arrShmid);
 
-    printf("Attempting to delete temp file \"%s\"\n", COMMON_FILEPATH);
-    int removeStatus = remove(COMMON_FILEPATH);
-
-    if (removeStatus == 0)
-        printf("Syccessfully removed %s\n", COMMON_FILEPATH);
-    else if (removeStatus == -1)
-        perror("failed to delete file");
+    deleteFile(ARRAY_FILEPATH);
+    deleteFile(ARRAY_SIZE_FILEPATH);
 
     // now we have freed the SHM, now we kill the program itself
     status = kill(0, SIGKILL);
@@ -125,7 +156,7 @@ void terminateProgram(int signum)
     else if (status == -1)
     {
         perror("kill failed.\n");
-        fprintf(stderr, "Cannot remove shared memory with id = %d.\n", shmid);
+        fprintf(stderr, "Cannot remove shared memory with id = %d.\n", arrShmid);
     }
     else
         fprintf(stderr, "kill(2) returned wrong value.\n");
@@ -137,7 +168,7 @@ void terminateProgram(int signum)
  */
 void setSharedArray()
 {
-    att *attArrPtr = (att *)getShmDataPtr(shmid);
+    att *attArrPtr = (att *)getShmDataPtr(arrShmid);
 
     for (int i = 0; i < arrSize; i++)
         attArrPtr[i].roll = -1;
@@ -149,8 +180,8 @@ void setSharedArray()
  * @brief checks if the given string is all numbers or not
  *
  * @param c
- * @return true
- * @return false
+ * @return true when the string has all numeric characters
+ * @return false otherwise
  */
 bool isCharNumeric(char *c)
 {
@@ -193,18 +224,17 @@ int main(int argc, char *argv[])
     sighandler_t shandler = signal(SIGINT, terminateProgram);
 
     // get common file shmkey to get/make same shared memory
-    printf("Generating a common file \"%s\" for inter process communication\n", COMMON_FILEPATH);
-    FILE *fp = fopen(COMMON_FILEPATH, "w");
-    if (fp == NULL)
-    {
-        perror("File not able to made");
-        exit(0);
-    }
-    fclose(fp);
+    createFile(ARRAY_FILEPATH);
+    int shmkey = ftok(ARRAY_FILEPATH, PROJ_ID);
+    arrShmid = shmget(shmkey, sizeof(att) * arrSize, IPC_CREAT | 0666);
 
-    // get common file shmkey to get/make same shared memory
-    int shmkey = ftok(COMMON_FILEPATH, PROJ_ID);
-    shmid = shmget(shmkey, sizeof(att) * arrSize, IPC_CREAT | 0666);
+    // get common file shmkey for the arraysize and update it to the arraySize for other process.
+    createFile(ARRAY_SIZE_FILEPATH);
+    shmkey = ftok(ARRAY_SIZE_FILEPATH, PROJ_ID);
+    arrSizeShmid = shmget(shmkey, sizeof(int), IPC_CREAT | 0666);
+    int *shmArrSizePtr = (int *)getShmDataPtr(arrSizeShmid);
+    *shmArrSizePtr = arrSize;
+    shmdt(shmArrSizePtr);
 
     setSharedArray(); // set default values;
     while (1)

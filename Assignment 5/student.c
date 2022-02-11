@@ -14,7 +14,8 @@
 #include <string.h>  // for strlen()
 #include <ctype.h>   // for isdigit()
 
-const char *COMMON_FILEPATH = "./common_file";
+const char *ARRAY_FILEPATH = "./common_array";
+const char *ARRAY_SIZE_FILEPATH = "./common_array_size";
 const int PROJ_ID = 1;
 
 typedef struct att
@@ -81,19 +82,35 @@ int main(int argc, char *argv[])
 
     int idx = atoi(argv[1]);
 
-    // TODO: how to check if the size of index given will overflow or not?
+    // get the common file shmkey to get the arrSize;
+    int shmkey = ftok(ARRAY_SIZE_FILEPATH, PROJ_ID);
+    int arrSizeShmid = shmget(shmkey, 0, 0);
+    int *arrSizeShmPtr = (int *)getShmDataPtr(arrSizeShmid);
+    int arrSize = *arrSizeShmPtr;
+    shmdt(arrSizeShmPtr);
 
-    // note in the present situation going out of bound writes it to that location without throwing any error,
-    // this could cause problem to other programs
+    // check if the given index is possible or not
+    if (idx < 0 || idx >= arrSize)
+    {
+        printf("Error: index given in out of scope\n");
+        exit(0);
+    }
 
     // get common file shmkey to get/make same shared memory
-    int shmkey = ftok(COMMON_FILEPATH, PROJ_ID);
-    int shmid = shmget(shmkey, 0, 0);
+    shmkey = ftok(ARRAY_FILEPATH, PROJ_ID);
+    int arrShmid = shmget(shmkey, 0, 0);
 
     // set the roll number and current time
-    att *attArrPtr = (att *)getShmDataPtr(shmid);
-    attArrPtr[idx].roll = idx;
-    attArrPtr[idx].tm = time(NULL);
+    att *attArrPtr = (att *)getShmDataPtr(arrShmid);
+    if (attArrPtr[idx].roll == -1)
+    {
+        attArrPtr[idx].roll = idx;
+        attArrPtr[idx].tm = time(NULL);
+        printf("Successfully Added Student %d to the attendance list\n", idx);
+    }
+    else
+        printf("Attendance already added, you should stop now!!");
+
     shmdt(attArrPtr);
 
     return 0;
