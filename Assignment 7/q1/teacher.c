@@ -24,7 +24,11 @@ const char *COUNT_FILEPATH = "./common_count";
 const char *ROLL_FILEPATH = "./common_roll";
 const char *SEM_FILEPATH = "./semaphore";
 const int PROJ_ID = 1;
-const int SEM_SET_SIZE = 1;
+const int SEM_SET_SIZE = 2; // two semaphores, one is for teacher-student and another is for inter-student
+// a student first waits for nter student semaphores (this access is granted by teacher only, see index 1 semaphore)
+// then the students waits for the student teacher seamphore
+// then the student gives his info
+// the teacher will then wait for the student teacher semaphore, read the shared data, then grant access for another student by incrementing the inter student semaphore
 
 int countShmid; // made this global for sighandler
 int rollShmid;  // made this global for sighandler
@@ -342,8 +346,9 @@ int main(int argc, char *argv[])
     *rollPtr = -1;
     shmdt(rollPtr);
 
-    allocateSemSet(SEM_FILEPATH, &semid, 1);
+    allocateSemSet(SEM_FILEPATH, &semid, SEM_SET_SIZE);
     semSetVal(semid, 0, 1);
+    semSetVal(semid, 1, 1);
 
     bool exit = false;
     while (1)
@@ -374,9 +379,10 @@ int main(int argc, char *argv[])
             }
 
             shmdt(countPtr);
+            semOperation(semid, 1, +1, SEM_UNDO, true); // unlock inter student semaphore
         }
         shmdt(rollPtr);
-        semOperation(semid, 0, +1, SEM_UNDO, false);
+        semOperation(semid, 0, +1, SEM_UNDO, false); // unlock student teacher semaphore
 
         if (exit)
             terminateProgram(SIGINT);

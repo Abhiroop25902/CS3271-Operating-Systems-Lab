@@ -116,25 +116,29 @@ int main(int argc, char *argv[])
 
     key_t sem_filekey = ftok(SEM_FILEPATH, PROJ_ID);
     int semid = semget(sem_filekey, 0, 0);
-    semOperation(semid, 0, -1, SEM_UNDO, true);
-    {
-        key_t count_filekey = ftok(COUNT_FILEPATH, PROJ_ID);
-        key_t roll_filekey = ftok(ROLL_FILEPATH, PROJ_ID);
 
-        int countShmId = shmget(count_filekey, 0, 0);
-        int RollShmId = shmget(roll_filekey, 0, 0);
+    // IMP: Not adding any flag means that there will be no specific UNDO, ot NOWAIT error
+    // not keeping UNDO here as I don't want this -1 to be undoed after execution end
+    semOperation(semid, 1, -1, 0, true);        // wait for the inter student semaphore
+    semOperation(semid, 0, -1, SEM_UNDO, true); // wait for the student teacher semaphore
 
-        int *countPtr = (int *)getShmDataPtr(countShmId);
-        int *rollPtr = (int *)getShmDataPtr(RollShmId);
+    key_t count_filekey = ftok(COUNT_FILEPATH, PROJ_ID);
+    key_t roll_filekey = ftok(ROLL_FILEPATH, PROJ_ID);
 
-        *countPtr = *countPtr + 1;
-        *rollPtr = roll;
+    int countShmId = shmget(count_filekey, 0, 0);
+    int RollShmId = shmget(roll_filekey, 0, 0);
 
-        shmdt(countPtr);
-        shmdt(rollPtr);
+    int *countPtr = (int *)getShmDataPtr(countShmId);
+    int *rollPtr = (int *)getShmDataPtr(RollShmId);
 
-        printf("Successfully Added Student %d to the attendance list\n", roll);
-    }
+    *countPtr = *countPtr + 1;
+    *rollPtr = roll;
+
+    shmdt(countPtr);
+    shmdt(rollPtr);
+
+    printf("Successfully Added Student %d to the attendance list\n", roll);
+
     semOperation(semid, 0, +1, SEM_UNDO, true);
 
     return 0;
