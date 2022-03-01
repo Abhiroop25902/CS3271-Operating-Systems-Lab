@@ -1,0 +1,14 @@
+node structure 
+
+typedef struct node{
+	int data; //can be easily ported to generic using void* and datasize parameter
+	int next_shmid; 
+}node;
+
+during initialization, next_shmid will be -1, but will have a proper value if next node is given
+
+as shmid given by OS startes from 0 and increses, shmid itslef can be seen as index of a semaphore set, we make a huge semaphore set (will be used as mutex only) with last elem defining if the there exist a linked list or not (will be used for deallocating the semaphore set)
+
+every node is made atomic using the semaphore set
+
+for deletion, we do similar method as the general LL delete, but we use two semaphores simultaneously
