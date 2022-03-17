@@ -24,6 +24,7 @@ typedef struct gll // definition of gll
     int dsize;
     struct node *list;
     int (*compareFn)(void *a, void *b);
+    void (*print_fn)(void *d);
     pthread_mutex_t gll_mutex;
 } gll;
 
@@ -158,7 +159,12 @@ int int_compare(void *a, void *b) // compare function for int
         return 1;
 }
 
-genericLL createGLL(int dsize, int (*cfunction)(void *, void *)) // makes Generic Linked List
+void int_print(void *d)
+{
+    printf("%d", *((int *)d));
+}
+
+genericLL createGLL(int dsize, int (*cfunction)(void *, void *), void (*print_fun)(void *)) // makes Generic Linked List
 {
     genericLL g;
     g = (gll *)malloc(sizeof(gll));
@@ -166,6 +172,7 @@ genericLL createGLL(int dsize, int (*cfunction)(void *, void *)) // makes Generi
     g->dsize = dsize;
     g->list = NULL;
     g->compareFn = cfunction;
+    g->print_fn = print_fun;
     init_mutex(g->gll_mutex);
 
     return g;
@@ -278,18 +285,21 @@ bool isPresentGLL(genericLL g, void *d) // checks of value present in node
     return false;
 }
 
-void print_all(genericLL g) // prints all the value of the linked list of g as is
+void *print_all(void *data) // prints all the value of the linked list of g as is
 {
+    genericLL g = (genericLL)data;
+
     printf("LIST : ");
     node *temp = g->list;
 
     while (temp != NULL)
     {
-        printf("%d->", *(int *)temp->data);
+        g->print_fn(temp->data);
+        printf("->");
         temp = temp->next;
     }
 
-    printf("NULL\n\n");
+    printf("NULL\n");
 }
 
 void *deleteNodeGLL(void *data) // deletes node
@@ -300,6 +310,7 @@ void *deleteNodeGLL(void *data) // deletes node
     // TODO: remove below line
     printf("Removing first %d in list\n", *((int *)d));
 
+    node *back = NULL;
     node *temp = g->list;
 
     while (temp != NULL)
@@ -314,18 +325,15 @@ void *deleteNodeGLL(void *data) // deletes node
             }
             else
             {
-                node *temp2 = g->list;
-                while (temp2->next != temp)
-                    temp2 = temp2->next;
-
-                lock_mutex(temp2->node_mutex);
-                temp2->next = temp->next;
-                unlock_mutex(temp2->node_mutex);
+                lock_mutex(back->node_mutex);
+                back->next = temp->next;
+                unlock_mutex(back->node_mutex);
             }
 
             free(temp);
             return NULL;
         }
+        back = temp;
         temp = temp->next;
     }
 }
@@ -347,11 +355,6 @@ int getNodeDataGLL(genericLL g, int i, void *d) // give output of ith node
     return 1;
 }
 
-void setCompareFn(genericLL g, int (*compFn)(void *, void *)) // sets g->compareFn to compFn
-{
-    g->compareFn = compFn;
-}
-
 void main()
 {
     pthread_attr_t attr; /*Set of thread attributes required to be passed in pthread_create() */
@@ -360,37 +363,39 @@ void main()
     /* int pthread_attr_init(pthread_attr_t *attr); */
     pthread_attr_init(&attr); /* same attr will be used for creating all the threads */
 
-    pthread_t ptids[6];
+    pthread_t ptids[10];
 
     printf("Made Generic Stack of int\n\n");
-    genericLL g = createGLL(sizeof(int), int_compare); // makes stack
+    genericLL g = createGLL(sizeof(int), int_compare, int_print); // makes stack
 
     int a = 1;
     passedData param1 = {g, &a};
     pthread_create(&ptids[0], &attr, addNodeGLL, &param1);
+    pthread_create(&ptids[8], &attr, print_all, g);
 
     int c = 0;
     passedData param2 = {g, &c};
     pthread_create(&ptids[1], &attr, addNodeGLLSorted, &param2);
+    pthread_create(&ptids[9], &attr, print_all, g);
 
     int b = 2;
     passedData param3 = {g, &b};
     pthread_create(&ptids[2], &attr, addNodeGLL, &param3);
+    pthread_create(&ptids[3], &attr, print_all, g);
 
     int d = 5;
     passedData param4 = {g, &d};
-    pthread_create(&ptids[3], &attr, addNodeGLLSorted, &param4);
+    pthread_create(&ptids[4], &attr, addNodeGLLSorted, &param4);
 
     int e = 5;
     passedData param5 = {g, &e};
-    pthread_create(&ptids[4], &attr, deleteNodeGLL, &param5);
+    pthread_create(&ptids[5], &attr, deleteNodeGLL, &param5);
+    pthread_create(&ptids[6], &attr, print_all, g);
 
-    pthread_create(&ptids[5], &attr, addNodeGLLSorted, &param5);
+    pthread_create(&ptids[7], &attr, addNodeGLLSorted, &param5);
 
-    for (int i = 0; i < 6; i++)
+    for (int i = 0; i < 10; i++)
         thread_join(ptids[i]);
-
-    print_all(g);
 
     int f = 2;
     printf("isPresentNode for 2: %s\n", isPresentGLL(g, &f) ? "True" : "False");
