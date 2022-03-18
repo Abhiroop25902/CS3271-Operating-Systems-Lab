@@ -193,8 +193,9 @@ void *addNodeGLL(void *data) // add node in the end
     genericLL g = ((passedData *)data)->g;
     void *d = ((passedData *)data)->d;
 
-    // TODO: comment the below line
-    printf("adding %d in linked list\n", *((int *)d));
+    printf("adding ");
+    g->print_fn(d);
+    printf(" in linked list\n");
 
     node *temp = createNode(g, d);
 
@@ -222,8 +223,9 @@ void *addNodeGLLSorted(void *data) // add node to make ascending order
     genericLL g = ((passedData *)data)->g;
     void *d = ((passedData *)data)->d;
 
-    // TODO: comment the below line
-    printf("adding %d in linked list (sorted)\n", *((int *)d));
+    printf("adding ");
+    g->print_fn(d);
+    printf(" in linked list\n");
 
     node *temp = createNode(g, d);
 
@@ -306,9 +308,10 @@ void *deleteNodeGLL(void *data) // deletes node
 {
     genericLL g = ((passedData *)data)->g;
     void *d = ((passedData *)data)->d;
-
-    // TODO: remove below line
-    printf("Removing first %d in list\n", *((int *)d));
+    
+    printf("Removing ");
+    g->print_fn(d);
+    printf(" from linked list\n");
 
     node *back = NULL;
     node *temp = g->list;
@@ -330,6 +333,7 @@ void *deleteNodeGLL(void *data) // deletes node
                 unlock_mutex(back->node_mutex);
             }
 
+            lock_mutex(temp->node_mutex);
             free(temp);
             return NULL;
         }
@@ -363,9 +367,8 @@ void main()
     /* int pthread_attr_init(pthread_attr_t *attr); */
     pthread_attr_init(&attr); /* same attr will be used for creating all the threads */
 
-    pthread_t ptids[10];
+    pthread_t ptids[15];
 
-    printf("Made Generic Stack of int\n\n");
     genericLL g = createGLL(sizeof(int), int_compare, int_print); // makes stack
 
     int a = 1;
@@ -394,7 +397,15 @@ void main()
 
     pthread_create(&ptids[7], &attr, addNodeGLLSorted, &param5);
 
-    for (int i = 0; i < 10; i++)
+    pthread_create(&ptids[8], &attr, print_all, g);
+    pthread_create(&ptids[9], &attr, print_all, g);
+    pthread_create(&ptids[10], &attr, deleteNodeGLL, &param5);
+    pthread_create(&ptids[11], &attr, print_all, g);
+    pthread_create(&ptids[12], &attr, print_all, g);
+    pthread_create(&ptids[13], &attr, addNodeGLL, &param3);
+    pthread_create(&ptids[14], &attr, print_all, g);
+
+    for (int i = 0; i < 15; i++)
         thread_join(ptids[i]);
 
     int f = 2;
