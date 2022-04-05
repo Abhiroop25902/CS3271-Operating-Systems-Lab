@@ -1,0 +1,5 @@
+ls -la
+cd ..
+ls ; echo "hello"
+ce && ls
+pwd
