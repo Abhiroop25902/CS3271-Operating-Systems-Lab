@@ -65,7 +65,7 @@ void *shared_memory_detach(const void *shared_mem_addr)
 void initProgram()
 {
     key_t fkey = ftok(SHM_FILE_PATH, SHM_PROJ_ID);
-    shmid = shmget(fkey, sizeof(FileInfo) * NUM_FILES,  0777); // set up permission for all users
+    shmid = shmget(fkey, sizeof(FileInfo) * NUM_FILES,  IPC_CREAT | 0777); // set up permission for all users
     // TODO: add support for the situation where shared memory is already present
 
     if (shmid == -1)
